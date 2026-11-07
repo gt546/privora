@@ -1,0 +1,51 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Private Chat</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="login-container" id="loginPage">
+    <div class="login-box">
+        <h1>Privora</h1>
+        <p>Welcome to your Privora</p>
+
+        <input type="text" id="userId" placeholder="Enter your ID">
+        <input type="password" id="password" placeholder="Enter password">
+
+        <button type="button" onclick="window.login()">Login</button>
+        <p id="error"></p>
+    </div>
+</div>
+
+<div class="chat-container" id="chatPage">
+
+    <div class="chat-header">
+        <div>
+            <h2>Privora</h2>
+            <span id="welcomeUser">Online conversation</span>
+        </div>
+        <button class="logout" onclick="logout()">Logout</button>
+    </div>
+
+    <div class="messages" id="messages"></div>
+
+    <div class="message-input">
+        <input
+            type="text"
+            id="messageInput"
+            placeholder="Type your message..."
+            maxlength="2000"
+        >
+        <button onclick="sendMessage()">Send</button>
+    </div>
+
+</div>
+
+<script type="module" src="script.js"></script>
+</body>
+</html>
