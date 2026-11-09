@@ -346,3 +346,42 @@ button:active {
     }
 }
 
+.user-status-bar {
+    display: flex;
+    align-items: center;
+    padding: 10px 15px;
+    background: #f5f7fa;
+    border-bottom: 1px solid #ddd;
+}
+
+.status-item {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.status-light {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.status-light.online {
+    background: #16c75a;
+    box-shadow: 0 0 7px #16c75a;
+}
+
+.status-light.offline {
+    background: #e53935;
+    box-shadow: 0 0 7px #e53935;
+}
+[hidden] {
+    display: none !important;
+}
+
+#chatPage:not([hidden]) {
+    display: flex;
+}

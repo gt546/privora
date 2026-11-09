@@ -1,11 +1,15 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Private Chat</title>
+    <title>Privora - Private Chat</title>
     <link rel="stylesheet" href="style.css">
+    <style>
+        [hidden] {
+            display: none !important;
+        }
+    </style>
 </head>
 <body>
 
@@ -14,38 +18,70 @@
         <h1>Privora</h1>
         <p>Welcome to your Privora</p>
 
-        <input type="text" id="userId" placeholder="Enter your ID">
-        <input type="password" id="password" placeholder="Enter password">
+        <input
+            type="text"
+            id="userId"
+            placeholder="Enter your email"
+            autocomplete="username"
+        >
 
-        <button type="button" onclick="window.login()">Login</button>
+        <input
+            type="password"
+            id="password"
+            placeholder="Enter password"
+            autocomplete="current-password"
+        >
+
+        <button type="button" id="loginBtn">Login</button>
+
         <p id="error"></p>
     </div>
 </div>
 
-<div class="chat-container" id="chatPage">
+<div class="chat-container" id="chatPage" hidden>
 
     <div class="chat-header">
+
+        <div class="user-status-bar">
+            <div class="status-item">
+                <span id="onlineLight"
+                      class="status-light offline"></span>
+
+                <span id="onlineText">Checking status...</span>
+            </div>
+        </div>
+
         <div>
             <h2>Privora</h2>
             <span id="welcomeUser">Online conversation</span>
         </div>
-        <button class="logout" onclick="logout()">Logout</button>
+
+        <button class="logout" id="logoutBtn">
+            Logout
+        </button>
+
     </div>
 
     <div class="messages" id="messages"></div>
 
     <div class="message-input">
+
         <input
             type="text"
             id="messageInput"
             placeholder="Type your message..."
             maxlength="2000"
         >
-        <button onclick="sendMessage()">Send</button>
+
+        <button type="button" id="sendBtn">
+            Send
+        </button>
+
     </div>
 
 </div>
 
 <script type="module" src="script.js"></script>
+
 </body>
 </html>
