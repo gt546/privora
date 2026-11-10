@@ -5,81 +5,124 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Privora - Private Chat</title>
     <link rel="stylesheet" href="style.css">
-    <style>
-        [hidden] {
-            display: none !important;
-        }
-    </style>
 </head>
 <body>
 
+<!-- LOGIN PAGE -->
 <div class="login-container" id="loginPage">
     <div class="login-box">
         <h1>Privora</h1>
-        <p>Welcome to your Privora</p>
 
-        <input
-            type="text"
-            id="userId"
-            placeholder="Enter your email"
-            autocomplete="username"
-        >
+        <div id="loginForm">
+            <p>Welcome back to Privora</p>
 
-        <input
-            type="password"
-            id="password"
-            placeholder="Enter password"
-            autocomplete="current-password"
-        >
+            <input type="email" id="userId"
+                placeholder="Enter your email">
 
-        <button type="button" id="loginBtn">Login</button>
+            <input type="password" id="password"
+                placeholder="Enter password">
+
+            <button type="button" id="loginBtn">Login</button>
+
+            <p>New to Privora?
+                <a href="#" id="showSignup">Create Account</a>
+            </p>
+        </div>
+
+        <div id="signupForm" hidden>
+            <p>Create your Privora account</p>
+
+            <input type="text" id="fullName"
+                placeholder="Full Name" maxlength="50">
+
+            <input type="text" id="newUsername"
+                placeholder="Choose Username" maxlength="20">
+
+            <input type="email" id="signupEmail"
+                placeholder="Email Address">
+
+            <input type="password" id="signupPassword"
+                placeholder="Create Password">
+
+            <input type="password" id="confirmPassword"
+                placeholder="Confirm Password">
+
+            <button type="button" id="signupBtn">
+                Create Account
+            </button>
+
+            <p>Already have an account?
+                <a href="#" id="showLogin">Login</a>
+            </p>
+        </div>
 
         <p id="error"></p>
     </div>
 </div>
 
-<div class="chat-container" id="chatPage" hidden>
+<!-- PRIVORA DASHBOARD -->
+<div class="dashboard-container" id="dashboardPage" hidden>
 
-    <div class="chat-header">
-
-        <div class="user-status-bar">
-            <div class="status-item">
-                <span id="onlineLight"
-                      class="status-light offline"></span>
-
-                <span id="onlineText">Checking status...</span>
-            </div>
-        </div>
-
+    <header class="main-header">
         <div>
             <h2>Privora</h2>
-            <span id="welcomeUser">Online conversation</span>
+            <p>Private connections, simple conversations.</p>
         </div>
 
-        <button class="logout" id="logoutBtn">
-            Logout
-        </button>
+        <button id="logoutBtn" class="logout">Logout</button>
+    </header>
 
+    <!-- MY PROFILE -->
+    <section class="profile-card">
+        <h3>My Profile</h3>
+
+        <div class="profile-info">
+            <div class="profile-avatar" id="profileAvatar">U</div>
+
+            <div class="profile-details">
+                <h3 id="profileFullName">Loading...</h3>
+                <p id="profileUsername">@username</p>
+                <p id="profilePrivoraId">PRV-ID</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- FIND PEOPLE -->
+    <section class="search-section">
+        <h3>Find People</h3>
+
+        <div class="search-box">
+            <input
+                type="text"
+                id="searchUsername"
+                placeholder="Search by username..."
+                maxlength="20"
+            >
+
+            <button type="button" id="searchUserBtn">
+                Search
+            </button>
+        </div>
+
+        <div id="searchResults"></div>
+    </section>
+
+    <!-- FRIENDS PLACEHOLDER -->
+ <!-- FOLLOW REQUESTS -->
+<section class="friends-section">
+    <h3>Follow Requests</h3>
+    <div id="followRequestsList">
+        <p class="empty-message">No pending requests.</p>
     </div>
+</section>
 
-    <div class="messages" id="messages"></div>
-
-    <div class="message-input">
-
-        <input
-            type="text"
-            id="messageInput"
-            placeholder="Type your message..."
-            maxlength="2000"
-        >
-
-        <button type="button" id="sendBtn">
-            Send
-        </button>
-
+<!-- MY FRIENDS -->
+<section class="friends-section">
+    <h3>My Friends</h3>
+    <div id="myFriendsList">
+        <p class="empty-message">No friends yet.</p>
     </div>
-
-</div>
+</section>
 
 <script type="module" src="script.js"></script>
 

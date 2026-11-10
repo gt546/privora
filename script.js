@@ -1,15 +1,9 @@
-// ==========================================
-// PRIVORA - COMPLETE FIREBASE CHAT SYSTEM
-// ==========================================
-
-
-// 1. FIREBASE IMPORTS
-
 import { initializeApp } from
 "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 
 import {
     getAuth,
+    createUserWithEmailAndPassword,
     signInWithEmailAndPassword,
     signOut
 } from
@@ -17,33 +11,22 @@ import {
 
 import {
     getFirestore,
-    collection,
-    addDoc,
-    query,
-    orderBy,
-    onSnapshot,
+    doc,
+    getDoc,
+    getDocs,
+    runTransaction,
     serverTimestamp,
-    deleteDoc,
-    doc
+    collection,
+    query,
+    where,
+    onSnapshot,
+    setDoc,
+    updateDoc,
+    deleteDoc
 } from
 "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+// FIREBASE CONFIGURATION
 
-import {
-    getDatabase,
-    ref,
-    onValue,
-    onDisconnect,
-    set,
-    serverTimestamp as rtdbTimestamp
-} from
-"https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-
-
-// ==========================================
-// 2. FIREBASE CONFIGURATION
-// ==========================================
-
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
   apiKey: "AIzaSyBfwZAWz_ZA8k1tMIXnZMOCZ_OKElXdZ5Y",
   authDomain: "chating-4f317.firebaseapp.com",
@@ -56,90 +39,88 @@ const firebaseConfig = {
 };
 
 
-// ==========================================
-// 3. INITIALIZE FIREBASE
-// ==========================================
+// INITIALIZE FIREBASE
 
 const app = initializeApp(firebaseConfig);
-
 const auth = getAuth(app);
-
 const db = getFirestore(app);
 
-const rtdb = getDatabase(
-    app,
-    firebaseConfig.databaseURL
-);
 
-
-// ==========================================
-// 4. GLOBAL VARIABLES
-// ==========================================
-
-let currentUser = null;
-
-let unsubscribe = null;
-
-let stopStatusListener = null;
-
-let stopConnectionListener = null;
-
-
-// ==========================================
-// 5. AUTHORIZED USERS
-// ==========================================
-
-const ALLOWED_USERS = [
-
-    "3WhYWGiPqPWxSD6l13MgeS2RZZV2",
-
-    "5JRvSxFaNVhVk92hrgrh45hVrYF3"
-
-];
-
-
-const OTHER_USER = {
-
-    "3WhYWGiPqPWxSD6l13MgeS2RZZV2":
-        "5JRvSxFaNVhVk92hrgrh45hVrYF3",
-
-    "5JRvSxFaNVhVk92hrgrh45hVrYF3":
-        "3WhYWGiPqPWxSD6l13MgeS2RZZV2"
-
-};
-
-
-// ==========================================
-// 6. HTML ELEMENTS
-// ==========================================
+// HTML ELEMENTS
 
 const loginPage = document.getElementById("loginPage");
+const dashboardPage = document.getElementById("dashboardPage");
 
-const chatPage = document.getElementById("chatPage");
-
-const messagesBox = document.getElementById("messages");
+const loginForm = document.getElementById("loginForm");
+const signupForm = document.getElementById("signupForm");
 
 const errorBox = document.getElementById("error");
 
-const messageInput = document.getElementById("messageInput");
+const fullNameInput = document.getElementById("fullName");
+const usernameInput = document.getElementById("newUsername");
+const signupEmailInput = document.getElementById("signupEmail");
+const signupPasswordInput = document.getElementById("signupPassword");
+const confirmPasswordInput = document.getElementById("confirmPassword");
 
-const onlineLight = document.getElementById("onlineLight");
+const signupBtn = document.getElementById("signupBtn");
+const loginBtn = document.getElementById("loginBtn");
 
-const onlineText = document.getElementById("onlineText");
+let currentUser = null;
+let currentUserProfile = null;
 
 
-function isAllowedUser(uid) {
+// PAGE CONTROL
 
-    return ALLOWED_USERS.includes(uid);
+function showDashboard(profile) {
+
+    loginPage.hidden = true;
+    dashboardPage.hidden = false;
+
+    currentUserProfile = profile;
+
+    document.getElementById("profileFullName").textContent =
+        profile.fullName || "User";
+
+    document.getElementById("profileUsername").textContent =
+        "@" + (profile.username || "");
+
+    document.getElementById("profilePrivoraId").textContent =
+        profile.privoraId || "";
+
+    document.getElementById("profileAvatar").textContent =
+        (profile.fullName || "U").charAt(0).toUpperCase();
+
+    document.getElementById("searchUsername").value = "";
+    document.getElementById("searchResults").innerHTML = "";
+
+
+    startFollowSystem();
+}
+
+
+// GENERATE UNIQUE PRIVORA ID
+
+function generatePrivoraID() {
+
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+    const randomValues =
+        crypto.getRandomValues(new Uint8Array(8));
+
+    let code = "";
+
+    for (const value of randomValues) {
+        code += chars[value % chars.length];
+    }
+
+    return "PRV-" + code;
 
 }
 
 
-// ==========================================
-// 7. LOGIN FUNCTION
-// ==========================================
+// LOGIN
 
-window.login = async function () {
+loginBtn.addEventListener("click", async () => {
 
     const email =
         document.getElementById("userId").value.trim();
@@ -147,73 +128,40 @@ window.login = async function () {
     const password =
         document.getElementById("password").value;
 
-    if (errorBox) {
-        errorBox.textContent = "";
-    }
+    errorBox.textContent = "";
+    errorBox.style.color = "";
 
     if (!email || !password) {
-
-        errorBox.textContent =
-            "Please enter email and password.";
-
+        errorBox.textContent = "Enter email and password.";
         return;
-
     }
 
-    const loginBtn =
-        document.getElementById("loginBtn") ||
-        loginPage.querySelector("button");
-
-    if (loginBtn) {
-
-        loginBtn.disabled = true;
-
-        loginBtn.textContent = "Logging in...";
-
-    }
+    loginBtn.disabled = true;
+    loginBtn.textContent = "Logging in...";
 
     try {
 
-        const result =
-            await signInWithEmailAndPassword(
-                auth,
-                email,
-                password
-            );
+        const result = await signInWithEmailAndPassword(
+            auth,
+            email,
+            password
+        );
 
         currentUser = result.user;
 
-        // Check authorized user
+        const profileRef = doc(
+            db,
+            "users",
+            currentUser.uid
+        );
 
-        if (!isAllowedUser(currentUser.uid)) {
+        const profileSnap = await getDoc(profileRef);
 
-            await signOut(auth);
-
-            currentUser = null;
-
-            errorBox.textContent =
-                "You are not authorised to use this chat.";
-
-            return;
-
+        if (!profileSnap.exists()) {
+            throw new Error("PRIVORA_PROFILE_NOT_FOUND");
         }
 
-        // Show chat page
-
-        loginPage.hidden = true;
-
-        chatPage.hidden = false;
-
-        document.getElementById("welcomeUser").textContent =
-            currentUser.email || "User";
-
-        // Load chat and presence
-
-        loadMessages();
-
-        startPresence();
-
-        console.log("PRIVORA LOGIN SUCCESS");
+        showDashboard(profileSnap.data());
 
     }
 
@@ -221,513 +169,447 @@ window.login = async function () {
 
         console.error("LOGIN ERROR:", error);
 
+        if (auth.currentUser) {
+            await signOut(auth);
+        }
+
+        currentUser = null;
+
         errorBox.textContent =
-            error.code + ": " + error.message;
+            error.message === "PRIVORA_PROFILE_NOT_FOUND"
+                ? "Your Privora profile was not found."
+                : error.code + ": " + error.message;
 
     }
 
     finally {
 
-        if (loginBtn) {
-
-            loginBtn.disabled = false;
-
-            loginBtn.textContent = "Login";
-
-        }
+        loginBtn.disabled = false;
+        loginBtn.textContent = "Login";
 
     }
 
-};
+});
 
 
-// ==========================================
-// 8. LOAD REAL-TIME MESSAGES
-// ==========================================
+// SWITCH LOGIN / SIGNUP
 
-function loadMessages() {
+document.getElementById("showSignup")
+.addEventListener("click", (event) => {
 
-    if (unsubscribe) {
+    event.preventDefault();
 
-        unsubscribe();
+    loginForm.hidden = true;
+    signupForm.hidden = false;
 
-        unsubscribe = null;
+    errorBox.textContent = "";
 
+});
+
+
+document.getElementById("showLogin")
+.addEventListener("click", (event) => {
+
+    event.preventDefault();
+
+    signupForm.hidden = true;
+    loginForm.hidden = false;
+
+    errorBox.textContent = "";
+
+});
+
+
+// SIGNUP
+
+signupBtn.addEventListener("click", async () => {
+
+    const fullName = fullNameInput.value.trim();
+    const username = usernameInput.value.trim();
+    const usernameLower = username.toLowerCase();
+
+    const email = signupEmailInput.value.trim();
+
+    const password = signupPasswordInput.value;
+    const confirmPassword = confirmPasswordInput.value;
+
+    errorBox.textContent = "";
+    errorBox.style.color = "";
+
+    if (!fullName || !username || !email ||
+        !password || !confirmPassword) {
+
+        errorBox.textContent = "Please fill all fields.";
+        return;
     }
 
-    const q = query(
+    if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
 
-        collection(db, "messages"),
+        errorBox.textContent =
+            "Username must contain 3-20 letters, numbers or underscores.";
 
-        orderBy("createdAt", "asc")
+        return;
+    }
 
-    );
+    if (password.length < 8) {
 
-    unsubscribe = onSnapshot(
+        errorBox.textContent =
+            "Password must contain at least 8 characters.";
 
-        q,
+        return;
+    }
 
-        (snapshot) => {
+    if (password !== confirmPassword) {
 
-            messagesBox.innerHTML = "";
+        errorBox.textContent = "Passwords do not match.";
+        return;
+    }
 
-            snapshot.forEach((messageDoc) => {
+    signupBtn.disabled = true;
+    signupBtn.textContent = "Creating Account...";
 
-                const data = messageDoc.data();
+    let createdUser = null;
 
-                const messageId = messageDoc.id;
+    try {
 
-                const div =
-                    document.createElement("div");
+        const result = await createUserWithEmailAndPassword(
+            auth,
+            email,
+            password
+        );
 
-                div.className =
-                    "message " +
-                    (data.sender === currentUser.uid
-                        ? "sent"
-                        : "received");
+        createdUser = result.user;
 
+        const uid = createdUser.uid;
 
-                // Message text
+        let profileCreated = false;
 
-                const messageText =
-                    document.createElement("div");
+        for (let attempt = 0; attempt < 5; attempt++) {
 
-                messageText.className = "message-text";
+            const privoraId = generatePrivoraID();
 
-                messageText.textContent =
-                    data.text || "";
+            const userRef = doc(db, "users", uid);
 
+            const usernameRef = doc(
+                db,
+                "usernames",
+                usernameLower
+            );
 
-                // Message time
+            const privoraIdRef = doc(
+                db,
+                "privoraIds",
+                privoraId
+            );
 
-                const time =
-                    document.createElement("small");
+            const reserved = await runTransaction(
+                db,
+                async (transaction) => {
 
-                time.className = "message-time";
+                    const usernameSnap =
+                        await transaction.get(usernameRef);
 
-                time.textContent =
-                    data.createdAt &&
-                    typeof data.createdAt.toDate === "function"
+                    const idSnap =
+                        await transaction.get(privoraIdRef);
 
-                    ? data.createdAt.toDate().toLocaleTimeString(
-                        [],
-                        {
-                            hour: "2-digit",
-                            minute: "2-digit"
-                        }
-                    )
-
-                    : "Sending...";
-
-
-                div.append(messageText, time);
-
-
-                // Desktop right-click delete
-
-                div.addEventListener(
-                    "contextmenu",
-                    (event) => {
-
-                        event.preventDefault();
-
-                        if (
-                            div.dataset.longPressed === "true"
-                        ) {
-
-                            div.dataset.longPressed = "false";
-
-                            return;
-
-                        }
-
-                        deleteMessage(messageId);
-
+                    if (usernameSnap.exists()) {
+                        throw new Error("USERNAME_TAKEN");
                     }
-                );
 
+                    if (idSnap.exists()) {
+                        return false;
+                    }
 
-                // Mobile long press delete
+                    const timestamp = serverTimestamp();
 
-                let pressTimer = null;
-
-                div.addEventListener(
-                    "touchstart",
-                    () => {
-
-                        clearTimeout(pressTimer);
-
-                        pressTimer = setTimeout(() => {
-
-                            div.dataset.longPressed = "true";
-
-                            deleteMessage(messageId);
-
-                        }, 650);
-
-                    },
-                    { passive: true }
-                );
-
-
-                ["touchend", "touchmove", "touchcancel"]
-                    .forEach((eventName) => {
-
-                        div.addEventListener(
-                            eventName,
-                            () => {
-
-                                clearTimeout(pressTimer);
-
-                            }
-                        );
-
+                    transaction.set(userRef, {
+                        fullName,
+                        username,
+                        usernameLower,
+                        privoraId,
+                        createdAt: timestamp
                     });
 
+                    transaction.set(usernameRef, {
+                        uid,
+                        username,
+                        usernameLower,
+                        privoraId,
+                        createdAt: timestamp
+                    });
 
-                messagesBox.appendChild(div);
+                    transaction.set(privoraIdRef, {
+                        uid,
+                        createdAt: timestamp
+                    });
 
-            });
+                    return true;
 
-
-            messagesBox.scrollTop =
-                messagesBox.scrollHeight;
-
-        },
-
-
-        (error) => {
-
-            console.error(
-                "MESSAGE LOADING ERROR:",
-                error
+                }
             );
 
-            alert(
-                "Loading failed: " + error.message
-            );
+            if (reserved) {
+                profileCreated = true;
+                break;
+            }
 
         }
 
-    );
+        if (!profileCreated) {
+            throw new Error("ID_GENERATION_FAILED");
+        }
+        await signOut(auth);
 
-}
+        currentUser = null;
 
+        signupForm.hidden = true;
+        loginForm.hidden = false;
 
-// ==========================================
-// 9. DELETE MESSAGE FOR EVERYONE
-// ==========================================
+        document.getElementById("userId").value = email;
+        document.getElementById("password").value = "";
 
-async function deleteMessage(messageId) {
+        fullNameInput.value = "";
+        usernameInput.value = "";
+        signupEmailInput.value = "";
+        signupPasswordInput.value = "";
+        confirmPasswordInput.value = "";
 
-    if (
-        !currentUser ||
-        !isAllowedUser(currentUser.uid)
-    ) {
+        errorBox.style.color = "green";
 
-        alert("You are not authorised.");
-
-        return;
-
-    }
-
-    const confirmed = window.confirm(
-        "Delete this message for everyone?"
-    );
-
-    if (!confirmed) return;
-
-    try {
-
-        await deleteDoc(
-            doc(db, "messages", messageId)
-        );
-
-        console.log("MESSAGE DELETED");
+        errorBox.textContent =
+            "Account created successfully! Please login.";
 
     }
 
     catch (error) {
 
-        console.error("DELETE ERROR:", error);
+        console.error("SIGNUP ERROR:", error);
 
-        alert(
-            "Message could not be deleted: " +
-            error.message
-        );
+        if (createdUser && auth.currentUser) {
+            await signOut(auth);
+        }
 
-    }
+        if (error.message === "USERNAME_TAKEN") {
 
-}
+            errorBox.textContent =
+                "This username is already taken.";
 
+        } else if (error.message === "ID_GENERATION_FAILED") {
 
-// ==========================================
-// 10. SEND MESSAGE
-// ==========================================
+            errorBox.textContent =
+                "Could not generate Privora ID. Try again.";
 
-window.sendMessage = async function () {
+        } else {
 
-    const text = messageInput.value.trim();
+            errorBox.textContent =
+                error.code
+                    ? error.code + ": " + error.message
+                    : error.message;
 
-    if (!text || !currentUser) return;
+        }
 
-    if (!isAllowedUser(currentUser.uid)) {
-
-        alert("You are not authorised.");
-
-        return;
-
-    }
-
-    messageInput.disabled = true;
-
-    try {
-
-        await addDoc(
-
-            collection(db, "messages"),
-
-            {
-
-                sender: currentUser.uid,
-
-                text: text,
-
-                createdAt: serverTimestamp()
-
-            }
-
-        );
-
-        messageInput.value = "";
-
-    }
-
-    catch (error) {
-
-        console.error("SEND ERROR:", error);
-
-        alert(
-            "Message could not be sent: " +
-            error.message
-        );
+        currentUser = null;
 
     }
 
     finally {
 
-        messageInput.disabled = false;
-
-        messageInput.focus();
-
-    }
-
-};
-
-
-// ==========================================
-// 11. ONLINE / OFFLINE PRESENCE
-// ==========================================
-
-async function startPresence() {
-
-    if (!currentUser) return;
-
-    const uid = currentUser.uid;
-
-    const myStatusRef =
-        ref(rtdb, "status/" + uid);
-
-    const connectedRef =
-        ref(rtdb, ".info/connected");
-
-
-    // Stop old listeners
-
-    if (stopStatusListener) {
-
-        stopStatusListener();
-
-        stopStatusListener = null;
+        signupBtn.disabled = false;
+        signupBtn.textContent = "Create Account";
 
     }
 
-    if (stopConnectionListener) {
+});
 
-        stopConnectionListener();
 
-        stopConnectionListener = null;
+// SEARCH USERS BY USERNAME
 
+document.getElementById("searchUserBtn")
+.addEventListener("click", searchUser);
+
+document.getElementById("searchUsername")
+.addEventListener("keydown", (event) => {
+
+    if (event.key === "Enter") {
+        searchUser();
     }
 
-
-    // Check Firebase connection
-
-    stopConnectionListener = onValue(
-
-        connectedRef,
-
-        async (snapshot) => {
-
-            if (snapshot.val() !== true) {
-
-                return;
-
-            }
-
-            try {
-
-                // Automatically set offline
-                // if connection is disconnected
-
-                await onDisconnect(myStatusRef).set({
-
-                    state: "offline",
-
-                    lastChanged: rtdbTimestamp()
-
-                });
+});
 
 
-                // Set online
+async function searchUser() {
 
-                await set(myStatusRef, {
+    const username = document
+        .getElementById("searchUsername")
+        .value.trim()
+        .toLowerCase();
 
-                    state: "online",
+    const results = document.getElementById("searchResults");
 
-                    lastChanged: rtdbTimestamp()
+    results.innerHTML = "";
 
-                });
-
-                console.log("PRESENCE ONLINE");
-
-            }
-
-            catch (error) {
-
-                console.error(
-                    "PRESENCE ERROR:",
-                    error
-                );
-
-            }
-
-        }
-
-    );
-
-
-    // Get other user UID
-
-    const otherUID = OTHER_USER[uid];
-
-    if (!otherUID) return;
-
-
-    // Listen to other user's status
-
-    stopStatusListener = onValue(
-
-        ref(rtdb, "status/" + otherUID),
-
-        (snapshot) => {
-
-            const data = snapshot.val();
-
-            const online =
-                data?.state === "online";
-
-
-            onlineLight.className =
-                "status-light " +
-                (online ? "online" : "offline");
-
-
-            onlineText.textContent =
-                online ? "Online" : "Offline";
-
-        }
-
-    );
-
-}
-
-
-// ==========================================
-// 12. LOGOUT
-// ==========================================
-
-window.logout = async function () {
-
-    // Stop listeners
-
-    if (stopConnectionListener) {
-
-        stopConnectionListener();
-
-        stopConnectionListener = null;
-
+    if (!currentUser) {
+        results.textContent = "Please login first.";
+        return;
     }
 
-    if (stopStatusListener) {
-
-        stopStatusListener();
-
-        stopStatusListener = null;
-
+    if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
+        results.textContent = "Enter a valid username.";
+        return;
     }
 
-    if (unsubscribe) {
+    const searchBtn =
+        document.getElementById("searchUserBtn");
 
-        unsubscribe();
-
-        unsubscribe = null;
-
-    }
-
-
-    // Set offline before logout
+    searchBtn.disabled = true;
+    searchBtn.textContent = "Searching...";
 
     try {
 
-        if (currentUser) {
+        const usernameRef = doc(
+            db,
+            "usernames",
+            username
+        );
 
-            await set(
+        const usernameSnap = await getDoc(usernameRef);
 
-                ref(
-                    rtdb,
-                    "status/" + currentUser.uid
-                ),
+        if (!usernameSnap.exists()) {
 
-                {
-
-                    state: "offline",
-
-                    lastChanged: rtdbTimestamp()
-
-                }
-
-            );
-
+            results.textContent = "No user found.";
+            return;
         }
+
+        const userData = usernameSnap.data();
+
+        if (userData.uid === currentUser.uid) {
+
+            results.textContent = "This is your own account.";
+            return;
+        }
+
+        const profileRef = doc(
+            db,
+            "users",
+            userData.uid
+        );
+
+        const profileSnap = await getDoc(profileRef);
+
+        if (!profileSnap.exists()) {
+
+            results.textContent = "User profile unavailable.";
+            return;
+        }
+
+        const profile = profileSnap.data();
+
+        const card = document.createElement("div");
+        card.className = "search-result";
+
+        const name = document.createElement("h4");
+        name.textContent = profile.fullName;
+
+        const handle = document.createElement("p");
+        handle.textContent = "@" + profile.username;
+
+        const id = document.createElement("small");
+        id.textContent = profile.privoraId;
+
+       const followBtn = document.createElement("button");
+
+const outgoingId =
+    currentUser.uid + "_" + userData.uid;
+
+const incomingId =
+    userData.uid + "_" + currentUser.uid;
+
+const outgoingRef = doc(db, "followRequests", outgoingId);
+const incomingRef = doc(db, "followRequests", incomingId);
+
+const [outgoingSnap, incomingSnap] = await Promise.all([
+    getDoc(outgoingRef),
+    getDoc(incomingRef)
+]);
+
+if (
+    (outgoingSnap.exists() &&
+     outgoingSnap.data().status === "accepted") ||
+    (incomingSnap.exists() &&
+     incomingSnap.data().status === "accepted")
+) {
+    followBtn.textContent = "Friends";
+    followBtn.disabled = true;
+}
+else if (
+    incomingSnap.exists() &&
+    incomingSnap.data().status === "pending"
+) {
+    followBtn.textContent = "Accept Request";
+
+    followBtn.addEventListener("click", async () => {
+        await acceptFollowRequest(incomingId);
+    });
+}
+else if (
+    outgoingSnap.exists() &&
+    outgoingSnap.data().status === "pending"
+) {
+    followBtn.textContent = "Request Sent";
+    followBtn.disabled = true;
+}
+else {
+    followBtn.textContent = "Follow";
+
+    followBtn.addEventListener("click", async () => {
+        await sendFollowRequest(userData.uid);
+        followBtn.textContent = "Request Sent";
+        followBtn.disabled = true;
+    });
+}
+
+card.append(name, handle, id, followBtn);
+results.appendChild(card);
 
     }
 
     catch (error) {
 
-        console.error(
-            "OFFLINE STATUS ERROR:",
-            error
-        );
+        console.error("SEARCH ERROR:", error);
+
+        results.textContent =
+            "Search failed: " + error.message;
 
     }
 
+    finally {
 
-    // Firebase logout
+        searchBtn.disabled = false;
+        searchBtn.textContent = "Search";
+
+    }
+
+}
+
+
+// LOGOUT
+
+document.getElementById("logoutBtn")
+.addEventListener("click", async () => {
 
     try {
-
+stopFollowSystem();
         await signOut(auth);
+
+        currentUser = null;
+        currentUserProfile = null;
+
+        dashboardPage.hidden = true;
+        loginPage.hidden = false;
+
+        document.getElementById("password").value = "";
+
+        errorBox.textContent = "";
 
     }
 
@@ -735,108 +617,354 @@ window.logout = async function () {
 
         console.error("LOGOUT ERROR:", error);
 
+        alert("Logout failed: " + error.message);
+
     }
 
-
-    // Reset application
-
-    currentUser = null;
-
-    messagesBox.innerHTML = "";
-
-    loginPage.hidden = false;
-
-    chatPage.hidden = true;
-
-    onlineLight.className =
-        "status-light offline";
-
-    onlineText.textContent = "Offline";
-
-    document.getElementById("password").value = "";
-
-    console.log("PRIVORA LOGOUT SUCCESS");
-
-};
+});
 
 
+console.log("PRIVORA DASHBOARD INITIALIZED");
 // ==========================================
-// 13. BUTTON EVENT HANDLERS
-// Supports both HTML onclick and button IDs
+// PRIVORA FOLLOW REQUEST SYSTEM
 // ==========================================
 
-function bindButton(selector, handler) {
+let followListeners = [];
 
-    const button = document.querySelector(selector);
 
-    if (!button) return;
+// STOP FOLLOW LISTENERS
 
-    // Avoid duplicate events if HTML already has onclick
+function stopFollowSystem() {
 
-    if (!button.hasAttribute("onclick")) {
+    followListeners.forEach(unsubscribe => unsubscribe());
 
-        button.addEventListener("click", handler);
+    followListeners = [];
+
+    document.getElementById("followRequestsList").innerHTML = "";
+    document.getElementById("myFriendsList").innerHTML = "";
+
+}
+
+
+// START FOLLOW SYSTEM
+
+function startFollowSystem() {
+
+    stopFollowSystem();
+
+    if (!currentUser) return;
+
+    const uid = currentUser.uid;
+
+    // Incoming pending requests
+
+    const incomingQuery = query(
+        collection(db, "followRequests"),
+        where("receiver", "==", uid),
+        where("status", "==", "pending")
+    );
+
+    const incomingListener = onSnapshot(
+        incomingQuery,
+        snapshot => renderIncomingRequests(snapshot),
+        error => console.error("REQUEST LIST ERROR:", error)
+    );
+
+    // Accepted incoming friends
+
+    const acceptedIncomingQuery = query(
+        collection(db, "followRequests"),
+        where("receiver", "==", uid),
+        where("status", "==", "accepted")
+    );
+
+    const acceptedIncomingListener = onSnapshot(
+        acceptedIncomingQuery,
+        snapshot => renderFriends(),
+        error => console.error("FRIENDS ERROR:", error)
+    );
+
+    // Accepted outgoing friends
+
+    const acceptedOutgoingQuery = query(
+        collection(db, "followRequests"),
+        where("sender", "==", uid),
+        where("status", "==", "accepted")
+    );
+
+    const acceptedOutgoingListener = onSnapshot(
+        acceptedOutgoingQuery,
+        snapshot => renderFriends(),
+        error => console.error("FRIENDS ERROR:", error)
+    );
+
+    followListeners.push(
+        incomingListener,
+        acceptedIncomingListener,
+        acceptedOutgoingListener
+    );
+
+}
+
+
+// SEND FOLLOW REQUEST
+
+async function sendFollowRequest(receiverUid) {
+
+    if (!currentUser || receiverUid === currentUser.uid) return;
+
+    const requestId = currentUser.uid + "_" + receiverUid;
+
+    const requestRef = doc(
+        db,
+        "followRequests",
+        requestId
+    );
+
+    try {
+
+        const existing = await getDoc(requestRef);
+
+        if (existing.exists()) {
+
+            alert("Follow request already exists.");
+            return;
+
+        }
+
+        await setDoc(requestRef, {
+            sender: currentUser.uid,
+            receiver: receiverUid,
+            status: "pending",
+            createdAt: serverTimestamp()
+        });
+
+        alert("Follow request sent successfully!");
+
+    }
+
+    catch (error) {
+
+        console.error("FOLLOW ERROR:", error);
+
+        alert("Request failed: " + error.message);
+
+        throw error;
 
     }
 
 }
 
 
-// Login button
+// ACCEPT REQUEST
 
-bindButton(
-    "#loginBtn, #loginPage button",
-    window.login
-);
+async function acceptFollowRequest(requestId) {
+
+    try {
+
+        await updateDoc(
+            doc(db, "followRequests", requestId),
+            {
+                status: "accepted"
+            }
+        );
+
+        alert("Friend request accepted!");
+
+    }
+
+    catch (error) {
+
+        console.error("ACCEPT ERROR:", error);
+
+        alert("Could not accept request: " + error.message);
+
+    }
+
+}
 
 
-// Logout button
+// REJECT REQUEST
 
-bindButton(
-    "#logoutBtn, .logout",
-    window.logout
-);
+async function rejectFollowRequest(requestId) {
+
+    const confirmed = confirm(
+        "Are you sure you want to reject this request?"
+    );
+
+    if (!confirmed) return;
+
+    try {
+
+        await deleteDoc(
+            doc(db, "followRequests", requestId)
+        );
+
+    }
+
+    catch (error) {
+
+        console.error("REJECT ERROR:", error);
+
+        alert("Could not reject request: " + error.message);
+
+    }
+
+}
 
 
-// Send button
+// CREATE PERSON CARD
 
-bindButton(
-    "#sendBtn, .message-input button",
-    window.sendMessage
-);
+async function createPersonCard(uid, actionButtons = []) {
+
+    const profileSnap = await getDoc(
+        doc(db, "users", uid)
+    );
+
+    if (!profileSnap.exists()) return null;
+
+    const profile = profileSnap.data();
+
+    const card = document.createElement("div");
+    card.className = "search-result";
+
+    const name = document.createElement("h4");
+    name.textContent = profile.fullName || "User";
+
+    const username = document.createElement("p");
+    username.textContent = "@" + (profile.username || "");
+
+    const id = document.createElement("small");
+    id.textContent = profile.privoraId || "";
+
+    card.append(name, username, id);
+
+    actionButtons.forEach(button => {
+        card.appendChild(button);
+    });
+
+    return card;
+
+}
 
 
-// ==========================================
-// 14. ENTER KEY TO SEND MESSAGE
-// ==========================================
+// RENDER INCOMING REQUESTS
 
-messageInput.addEventListener(
-    "keydown",
-    (event) => {
+async function renderIncomingRequests(snapshot) {
 
-        if (
-            event.key === "Enter" &&
-            !event.shiftKey
-        ) {
+    const container =
+        document.getElementById("followRequestsList");
 
-            event.preventDefault();
+    container.innerHTML = "";
 
-            window.sendMessage();
+    if (snapshot.empty) {
+
+        container.innerHTML =
+            '<p class="empty-message">No pending requests.</p>';
+
+        return;
+
+    }
+
+    for (const requestDoc of snapshot.docs) {
+
+        const data = requestDoc.data();
+
+        const acceptBtn = document.createElement("button");
+        acceptBtn.textContent = "Accept";
+
+        acceptBtn.addEventListener("click", () => {
+            acceptFollowRequest(requestDoc.id);
+        });
+
+        const rejectBtn = document.createElement("button");
+        rejectBtn.textContent = "Reject";
+        rejectBtn.className = "reject-btn";
+
+        rejectBtn.addEventListener("click", () => {
+            rejectFollowRequest(requestDoc.id);
+        });
+
+        const card = await createPersonCard(
+            data.sender,
+            [acceptBtn, rejectBtn]
+        );
+
+        if (card) container.appendChild(card);
+
+    }
+
+}
+
+
+// RENDER MY FRIENDS
+
+async function renderFriends() {
+
+    if (!currentUser) return;
+
+    const container =
+        document.getElementById("myFriendsList");
+
+    const uid = currentUser.uid;
+
+    try {
+
+        const incomingQuery = query(
+            collection(db, "followRequests"),
+            where("receiver", "==", uid),
+            where("status", "==", "accepted")
+        );
+
+        const outgoingQuery = query(
+            collection(db, "followRequests"),
+            where("sender", "==", uid),
+            where("status", "==", "accepted")
+        );
+
+        const [incoming, outgoing] = await Promise.all([
+            getDocs(incomingQuery),
+            getDocs(outgoingQuery)
+        ]);
+
+        const friendIds = new Set();
+
+        incoming.forEach(item => {
+            friendIds.add(item.data().sender);
+        });
+
+        outgoing.forEach(item => {
+            friendIds.add(item.data().receiver);
+        });
+
+        container.innerHTML = "";
+
+        if (friendIds.size === 0) {
+
+            container.innerHTML =
+                '<p class="empty-message">No friends yet.</p>';
+
+            return;
+
+        }
+
+        for (const friendUid of friendIds) {
+
+            const card = await createPersonCard(friendUid);
+
+            if (card) container.appendChild(card);
 
         }
 
     }
-);
 
+    catch (error) {
 
-// ==========================================
-// 15. INITIAL PAGE STATE
-// ==========================================
+        console.error("FRIENDS LOADING ERROR:", error);
 
-loginPage.hidden = false;
+        container.textContent =
+            "Could not load friends: " + error.message;
 
-chatPage.hidden = true;
+    }
 
-console.log(
-    "PRIVORA INITIALIZED SUCCESSFULLY"
-);
+}
