@@ -1,3 +1,6 @@
+// PRIVORA PRIVATE CHAT
+// Firebase SDK 10.12.2
+
 import { initializeApp } from
 "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 
@@ -5,28 +8,26 @@ import {
     getAuth,
     createUserWithEmailAndPassword,
     signInWithEmailAndPassword,
-    signOut
+    signOut,
+    onAuthStateChanged
 } from
 "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 import {
-    getFirestore,
-    doc,
-    getDoc,
-    getDocs,
-    runTransaction,
-    serverTimestamp,
-    collection,
-    query,
-    where,
-    onSnapshot,
-    setDoc,
-    updateDoc,
-    deleteDoc
+    getDatabase,
+    ref,
+    get,
+    set,
+    push,
+    onValue,
+    remove,
+    serverTimestamp
 } from
-"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-// FIREBASE CONFIGURATION
+"https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
+
+// FIREBASE CONFIGURATION
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
   apiKey: "AIzaSyBfwZAWz_ZA8k1tMIXnZMOCZ_OKElXdZ5Y",
   authDomain: "chating-4f317.firebaseapp.com",
@@ -38,184 +39,493 @@ const firebaseConfig = {
   measurementId: "G-WXZ1JB32E8"
 };
 
-
 // INITIALIZE FIREBASE
 
 const app = initializeApp(firebaseConfig);
+
 const auth = getAuth(app);
-const db = getFirestore(app);
+
+const db = getDatabase(app);
 
 
 // HTML ELEMENTS
 
-const loginPage = document.getElementById("loginPage");
-const dashboardPage = document.getElementById("dashboardPage");
+const authSection =
+document.getElementById("authSection");
 
-const loginForm = document.getElementById("loginForm");
-const signupForm = document.getElementById("signupForm");
+const chatSection =
+document.getElementById("chatSection");
 
-const errorBox = document.getElementById("error");
+const authForm =
+document.getElementById("authForm");
 
-const fullNameInput = document.getElementById("fullName");
-const usernameInput = document.getElementById("newUsername");
-const signupEmailInput = document.getElementById("signupEmail");
-const signupPasswordInput = document.getElementById("signupPassword");
-const confirmPasswordInput = document.getElementById("confirmPassword");
+const emailInput =
+document.getElementById("emailInput");
 
-const signupBtn = document.getElementById("signupBtn");
-const loginBtn = document.getElementById("loginBtn");
+const passwordInput =
+document.getElementById("passwordInput");
+
+const signupBtn =
+document.getElementById("signupBtn");
+
+const logoutBtn =
+document.getElementById("logoutBtn");
+
+const authMessage =
+document.getElementById("authMessage");
+
+const myUidElement =
+document.getElementById("myUid");
+
+const copyUidBtn =
+document.getElementById("copyUidBtn");
+
+const openChatForm =
+document.getElementById("openChatForm");
+
+const friendUidInput =
+document.getElementById("friendUidInput");
+
+const chatTitle =
+document.getElementById("chatTitle");
+
+const chatHint =
+document.getElementById("chatHint");
+
+const messagesElement =
+document.getElementById("messages");
+
+const sendForm =
+document.getElementById("sendForm");
+
+const messageInput =
+document.getElementById("messageInput");
+
+const sendBtn =
+document.getElementById("sendBtn");
+
+const chatMessage =
+document.getElementById("chatMessage");
+
+
+// GLOBAL VARIABLES
 
 let currentUser = null;
-let currentUserProfile = null;
+
+let currentChatId = null;
+
+let currentFriendUid = null;
+
+let stopMessagesListener = null;
 
 
-// PAGE CONTROL
+// SHOW MESSAGE
 
-function showDashboard(profile) {
+function showMessage(element, text, isError = true) {
 
-    loginPage.hidden = true;
-    dashboardPage.hidden = false;
+    element.textContent = text;
 
-    currentUserProfile = profile;
-
-    document.getElementById("profileFullName").textContent =
-        profile.fullName || "User";
-
-    document.getElementById("profileUsername").textContent =
-        "@" + (profile.username || "");
-
-    document.getElementById("profilePrivoraId").textContent =
-        profile.privoraId || "";
-
-    document.getElementById("profileAvatar").textContent =
-        (profile.fullName || "U").charAt(0).toUpperCase();
-
-    document.getElementById("searchUsername").value = "";
-    document.getElementById("searchResults").innerHTML = "";
-
-
-    startFollowSystem();
+    element.style.color = isError
+        ? "#a33e54"
+        : "#26804b";
 }
 
 
-// GENERATE UNIQUE PRIVORA ID
+// CREATE COMMON CHAT ID
 
-function generatePrivoraID() {
+function makeChatId(uidA, uidB) {
 
-    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    return [uidA, uidB].sort().join("__");
 
-    const randomValues =
-        crypto.getRandomValues(new Uint8Array(8));
+}
 
-    let code = "";
 
-    for (const value of randomValues) {
-        code += chars[value % chars.length];
+// CLEAR CHAT SCREEN
+
+function clearMessages(text = "Your messages will appear here.") {
+
+    messagesElement.replaceChildren();
+
+    const empty = document.createElement("div");
+
+    empty.className = "empty-state";
+
+    empty.textContent = text;
+
+    messagesElement.appendChild(empty);
+
+}
+
+
+// FORMAT TIME
+
+function formatTime(timestamp) {
+
+    if (!timestamp) return "Sending...";
+
+    return new Date(timestamp).toLocaleString([], {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+    });
+
+}
+
+
+// RENDER MESSAGES
+
+function renderMessages(snapshot) {
+
+    messagesElement.replaceChildren();
+
+    if (!snapshot.exists()) {
+
+        clearMessages("No messages yet. Say hello!");
+
+        return;
     }
 
-    return "PRV-" + code;
+    snapshot.forEach((childSnapshot) => {
+
+        const message = childSnapshot.val();
+
+        const messageId = childSnapshot.key;
+
+        const row = document.createElement("div");
+
+        const mine =
+            message.senderUid === currentUser.uid;
+
+        row.className =
+            `message-row ${mine ? "mine" : "theirs"}`;
+
+        const bubble = document.createElement("div");
+
+        bubble.className = "message-bubble";
+
+        const text = document.createElement("div");
+
+        text.className = "message-text";
+
+        text.textContent = message.text || "";
+
+        const meta = document.createElement("div");
+
+        meta.className = "message-meta";
+
+        const time = document.createElement("span");
+
+        time.textContent = formatTime(message.createdAt);
+
+        const sender = document.createElement("span");
+
+        sender.textContent = mine ? "You" : "Friend";
+
+        meta.append(sender, time);
+
+        // DELETE BUTTON
+
+        const deleteButton =
+            document.createElement("button");
+
+        deleteButton.type = "button";
+
+        deleteButton.className = "delete-message";
+
+        deleteButton.textContent = "Delete";
+
+        deleteButton.addEventListener("click", () => {
+
+            deleteMessage(messageId);
+
+        });
+
+        meta.appendChild(deleteButton);
+
+        bubble.append(text, meta);
+
+        row.appendChild(bubble);
+
+        messagesElement.appendChild(row);
+
+    });
+
+    messagesElement.scrollTop =
+        messagesElement.scrollHeight;
+
+}
+
+
+// OPEN CHAT
+
+async function openChat(friendUid) {
+
+    const otherUid = friendUid.trim();
+
+    if (!currentUser) return;
+
+    if (!otherUid) {
+
+        showMessage(
+            chatMessage,
+            "Enter your friend's User ID."
+        );
+
+        return;
+    }
+
+    if (otherUid === currentUser.uid) {
+
+        showMessage(
+            chatMessage,
+            "You cannot chat with yourself."
+        );
+
+        return;
+    }
+
+    if (stopMessagesListener) {
+
+        stopMessagesListener();
+
+        stopMessagesListener = null;
+
+    }
+
+    currentFriendUid = otherUid;
+
+    currentChatId =
+        makeChatId(currentUser.uid, otherUid);
+
+    chatTitle.textContent = "Private Conversation";
+
+    chatHint.textContent =
+        `Chat with User ID: ${otherUid}`;
+
+    clearMessages("Connecting to chat...");
+
+    messageInput.disabled = true;
+
+    sendBtn.disabled = true;
+
+    const membersRef = ref(
+        db,
+        `chats/${currentChatId}/members`
+    );
+
+    try {
+
+        // CREATE TWO-MEMBER CHAT
+
+        try {
+
+            await set(membersRef, {
+
+                [currentUser.uid]: true,
+
+                [otherUid]: true
+
+            });
+
+        } catch (createError) {
+
+            let retrySnapshot = null;
+
+            for (let attempt = 0; attempt < 4; attempt++) {
+
+                try {
+
+                    retrySnapshot = await get(membersRef);
+
+                    if (retrySnapshot.exists()) break;
+
+                } catch (readError) {
+
+                    if (attempt === 3) {
+                        throw createError;
+                    }
+
+                }
+
+                await new Promise(resolve =>
+                    setTimeout(resolve, 350)
+                );
+
+            }
+
+            if (!retrySnapshot || !retrySnapshot.exists()) {
+                throw createError;
+            }
+
+        }
+
+
+        // VERIFY CHAT MEMBERS
+
+        const verifiedMembers =
+            await get(membersRef);
+
+        const members =
+            verifiedMembers.val() || {};
+
+        if (
+            members[currentUser.uid] !== true ||
+            members[otherUid] !== true
+        ) {
+
+            throw new Error(
+                "This chat is not available to these accounts."
+            );
+
+        }
+
+
+        // LISTEN TO MESSAGES
+
+        const messagesRef = ref(
+            db,
+            `chats/${currentChatId}/messages`
+        );
+
+        stopMessagesListener = onValue(
+            messagesRef,
+            renderMessages,
+            (error) => {
+
+                clearMessages("Could not load messages.");
+
+                showMessage(chatMessage, error.message);
+
+            }
+        );
+
+
+        messageInput.disabled = false;
+
+        sendBtn.disabled = false;
+
+        showMessage(
+            chatMessage,
+            "Chat connected. Messages are saved automatically.",
+            false
+        );
+
+        messageInput.focus();
+
+    } catch (error) {
+
+        console.error("Open chat error:", error);
+
+        clearMessages("Unable to open this chat.");
+
+        showMessage(
+            chatMessage,
+            error.message
+        );
+
+    }
+
+}
+
+
+// SEND MESSAGE
+
+async function sendMessage(text) {
+
+    if (
+        !currentUser ||
+        !currentChatId ||
+        !currentFriendUid
+    ) {
+
+        throw new Error("Open a friend's chat first.");
+
+    }
+
+    const cleanText = text.trim();
+
+    if (!cleanText) return;
+
+    const messagesRef = ref(
+        db,
+        `chats/${currentChatId}/messages`
+    );
+
+    const newMessageRef = push(messagesRef);
+
+    await set(newMessageRef, {
+
+        senderUid: currentUser.uid,
+
+        text: cleanText,
+
+        createdAt: serverTimestamp()
+
+    });
+
+}
+
+
+// DELETE MESSAGE FOR BOTH USERS
+
+async function deleteMessage(messageId) {
+
+    if (!currentChatId || !messageId) return;
+
+    const confirmed = confirm(
+        "Delete this message for both users?"
+    );
+
+    if (!confirmed) return;
+
+    try {
+
+        await remove(
+            ref(
+                db,
+                `chats/${currentChatId}/messages/${messageId}`
+            )
+        );
+
+        showMessage(
+            chatMessage,
+            "Message deleted for both users.",
+            false
+        );
+
+    } catch (error) {
+
+        console.error("Delete error:", error);
+
+        showMessage(chatMessage, error.message);
+
+    }
 
 }
 
 
 // LOGIN
 
-loginBtn.addEventListener("click", async () => {
+authForm.addEventListener("submit", async (event) => {
 
-    const email =
-        document.getElementById("userId").value.trim();
+    event.preventDefault();
 
-    const password =
-        document.getElementById("password").value;
-
-    errorBox.textContent = "";
-    errorBox.style.color = "";
-
-    if (!email || !password) {
-        errorBox.textContent = "Enter email and password.";
-        return;
-    }
-
-    loginBtn.disabled = true;
-    loginBtn.textContent = "Logging in...";
+    showMessage(authMessage, "Signing in...", false);
 
     try {
 
-        const result = await signInWithEmailAndPassword(
+        await signInWithEmailAndPassword(
             auth,
-            email,
-            password
+            emailInput.value.trim(),
+            passwordInput.value
         );
 
-        currentUser = result.user;
+    } catch (error) {
 
-        const profileRef = doc(
-            db,
-            "users",
-            currentUser.uid
-        );
-
-        const profileSnap = await getDoc(profileRef);
-
-        if (!profileSnap.exists()) {
-            throw new Error("PRIVORA_PROFILE_NOT_FOUND");
-        }
-
-        showDashboard(profileSnap.data());
+        showMessage(authMessage, error.message);
 
     }
-
-    catch (error) {
-
-        console.error("LOGIN ERROR:", error);
-
-        if (auth.currentUser) {
-            await signOut(auth);
-        }
-
-        currentUser = null;
-
-        errorBox.textContent =
-            error.message === "PRIVORA_PROFILE_NOT_FOUND"
-                ? "Your Privora profile was not found."
-                : error.code + ": " + error.message;
-
-    }
-
-    finally {
-
-        loginBtn.disabled = false;
-        loginBtn.textContent = "Login";
-
-    }
-
-});
-
-
-// SWITCH LOGIN / SIGNUP
-
-document.getElementById("showSignup")
-.addEventListener("click", (event) => {
-
-    event.preventDefault();
-
-    loginForm.hidden = true;
-    signupForm.hidden = false;
-
-    errorBox.textContent = "";
-
-});
-
-
-document.getElementById("showLogin")
-.addEventListener("click", (event) => {
-
-    event.preventDefault();
-
-    signupForm.hidden = true;
-    loginForm.hidden = false;
-
-    errorBox.textContent = "";
 
 });
 
@@ -224,747 +534,178 @@ document.getElementById("showLogin")
 
 signupBtn.addEventListener("click", async () => {
 
-    const fullName = fullNameInput.value.trim();
-    const username = usernameInput.value.trim();
-    const usernameLower = username.toLowerCase();
-
-    const email = signupEmailInput.value.trim();
-
-    const password = signupPasswordInput.value;
-    const confirmPassword = confirmPasswordInput.value;
-
-    errorBox.textContent = "";
-    errorBox.style.color = "";
-
-    if (!fullName || !username || !email ||
-        !password || !confirmPassword) {
-
-        errorBox.textContent = "Please fill all fields.";
-        return;
-    }
-
-    if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
-
-        errorBox.textContent =
-            "Username must contain 3-20 letters, numbers or underscores.";
-
-        return;
-    }
-
-    if (password.length < 8) {
-
-        errorBox.textContent =
-            "Password must contain at least 8 characters.";
-
-        return;
-    }
-
-    if (password !== confirmPassword) {
-
-        errorBox.textContent = "Passwords do not match.";
-        return;
-    }
-
-    signupBtn.disabled = true;
-    signupBtn.textContent = "Creating Account...";
-
-    let createdUser = null;
+    showMessage(authMessage, "Creating account...", false);
 
     try {
 
-        const result = await createUserWithEmailAndPassword(
+        await createUserWithEmailAndPassword(
             auth,
-            email,
-            password
+            emailInput.value.trim(),
+            passwordInput.value
         );
 
-        createdUser = result.user;
+    } catch (error) {
 
-        const uid = createdUser.uid;
-
-        let profileCreated = false;
-
-        for (let attempt = 0; attempt < 5; attempt++) {
-
-            const privoraId = generatePrivoraID();
-
-            const userRef = doc(db, "users", uid);
-
-            const usernameRef = doc(
-                db,
-                "usernames",
-                usernameLower
-            );
-
-            const privoraIdRef = doc(
-                db,
-                "privoraIds",
-                privoraId
-            );
-
-            const reserved = await runTransaction(
-                db,
-                async (transaction) => {
-
-                    const usernameSnap =
-                        await transaction.get(usernameRef);
-
-                    const idSnap =
-                        await transaction.get(privoraIdRef);
-
-                    if (usernameSnap.exists()) {
-                        throw new Error("USERNAME_TAKEN");
-                    }
-
-                    if (idSnap.exists()) {
-                        return false;
-                    }
-
-                    const timestamp = serverTimestamp();
-
-                    transaction.set(userRef, {
-                        fullName,
-                        username,
-                        usernameLower,
-                        privoraId,
-                        createdAt: timestamp
-                    });
-
-                    transaction.set(usernameRef, {
-                        uid,
-                        username,
-                        usernameLower,
-                        privoraId,
-                        createdAt: timestamp
-                    });
-
-                    transaction.set(privoraIdRef, {
-                        uid,
-                        createdAt: timestamp
-                    });
-
-                    return true;
-
-                }
-            );
-
-            if (reserved) {
-                profileCreated = true;
-                break;
-            }
-
-        }
-
-        if (!profileCreated) {
-            throw new Error("ID_GENERATION_FAILED");
-        }
-        await signOut(auth);
-
-        currentUser = null;
-
-        signupForm.hidden = true;
-        loginForm.hidden = false;
-
-        document.getElementById("userId").value = email;
-        document.getElementById("password").value = "";
-
-        fullNameInput.value = "";
-        usernameInput.value = "";
-        signupEmailInput.value = "";
-        signupPasswordInput.value = "";
-        confirmPasswordInput.value = "";
-
-        errorBox.style.color = "green";
-
-        errorBox.textContent =
-            "Account created successfully! Please login.";
-
-    }
-
-    catch (error) {
-
-        console.error("SIGNUP ERROR:", error);
-
-        if (createdUser && auth.currentUser) {
-            await signOut(auth);
-        }
-
-        if (error.message === "USERNAME_TAKEN") {
-
-            errorBox.textContent =
-                "This username is already taken.";
-
-        } else if (error.message === "ID_GENERATION_FAILED") {
-
-            errorBox.textContent =
-                "Could not generate Privora ID. Try again.";
-
-        } else {
-
-            errorBox.textContent =
-                error.code
-                    ? error.code + ": " + error.message
-                    : error.message;
-
-        }
-
-        currentUser = null;
-
-    }
-
-    finally {
-
-        signupBtn.disabled = false;
-        signupBtn.textContent = "Create Account";
+        showMessage(authMessage, error.message);
 
     }
 
 });
-
-
-// SEARCH USERS BY USERNAME
-
-document.getElementById("searchUserBtn")
-.addEventListener("click", searchUser);
-
-document.getElementById("searchUsername")
-.addEventListener("keydown", (event) => {
-
-    if (event.key === "Enter") {
-        searchUser();
-    }
-
-});
-
-
-async function searchUser() {
-
-    const username = document
-        .getElementById("searchUsername")
-        .value.trim()
-        .toLowerCase();
-
-    const results = document.getElementById("searchResults");
-
-    results.innerHTML = "";
-
-    if (!currentUser) {
-        results.textContent = "Please login first.";
-        return;
-    }
-
-    if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
-        results.textContent = "Enter a valid username.";
-        return;
-    }
-
-    const searchBtn =
-        document.getElementById("searchUserBtn");
-
-    searchBtn.disabled = true;
-    searchBtn.textContent = "Searching...";
-
-    try {
-
-        const usernameRef = doc(
-            db,
-            "usernames",
-            username
-        );
-
-        const usernameSnap = await getDoc(usernameRef);
-
-        if (!usernameSnap.exists()) {
-
-            results.textContent = "No user found.";
-            return;
-        }
-
-        const userData = usernameSnap.data();
-
-        if (userData.uid === currentUser.uid) {
-
-            results.textContent = "This is your own account.";
-            return;
-        }
-
-        const profileRef = doc(
-            db,
-            "users",
-            userData.uid
-        );
-
-        const profileSnap = await getDoc(profileRef);
-
-        if (!profileSnap.exists()) {
-
-            results.textContent = "User profile unavailable.";
-            return;
-        }
-
-        const profile = profileSnap.data();
-
-        const card = document.createElement("div");
-        card.className = "search-result";
-
-        const name = document.createElement("h4");
-        name.textContent = profile.fullName;
-
-        const handle = document.createElement("p");
-        handle.textContent = "@" + profile.username;
-
-        const id = document.createElement("small");
-        id.textContent = profile.privoraId;
-
-       const followBtn = document.createElement("button");
-
-const outgoingId =
-    currentUser.uid + "_" + userData.uid;
-
-const incomingId =
-    userData.uid + "_" + currentUser.uid;
-
-const outgoingRef = doc(db, "followRequests", outgoingId);
-const incomingRef = doc(db, "followRequests", incomingId);
-
-const [outgoingSnap, incomingSnap] = await Promise.all([
-    getDoc(outgoingRef),
-    getDoc(incomingRef)
-]);
-
-if (
-    (outgoingSnap.exists() &&
-     outgoingSnap.data().status === "accepted") ||
-    (incomingSnap.exists() &&
-     incomingSnap.data().status === "accepted")
-) {
-    followBtn.textContent = "Friends";
-    followBtn.disabled = true;
-}
-else if (
-    incomingSnap.exists() &&
-    incomingSnap.data().status === "pending"
-) {
-    followBtn.textContent = "Accept Request";
-
-    followBtn.addEventListener("click", async () => {
-        await acceptFollowRequest(incomingId);
-    });
-}
-else if (
-    outgoingSnap.exists() &&
-    outgoingSnap.data().status === "pending"
-) {
-    followBtn.textContent = "Request Sent";
-    followBtn.disabled = true;
-}
-else {
-    followBtn.textContent = "Follow";
-
-    followBtn.addEventListener("click", async () => {
-        await sendFollowRequest(userData.uid);
-        followBtn.textContent = "Request Sent";
-        followBtn.disabled = true;
-    });
-}
-
-card.append(name, handle, id, followBtn);
-results.appendChild(card);
-
-    }
-
-    catch (error) {
-
-        console.error("SEARCH ERROR:", error);
-
-        results.textContent =
-            "Search failed: " + error.message;
-
-    }
-
-    finally {
-
-        searchBtn.disabled = false;
-        searchBtn.textContent = "Search";
-
-    }
-
-}
 
 
 // LOGOUT
 
-document.getElementById("logoutBtn")
-.addEventListener("click", async () => {
+logoutBtn.addEventListener("click", async () => {
 
     try {
-stopFollowSystem();
+
         await signOut(auth);
 
-        currentUser = null;
-        currentUserProfile = null;
+    } catch (error) {
 
-        dashboardPage.hidden = true;
-        loginPage.hidden = false;
-
-        document.getElementById("password").value = "";
-
-        errorBox.textContent = "";
-
-    }
-
-    catch (error) {
-
-        console.error("LOGOUT ERROR:", error);
-
-        alert("Logout failed: " + error.message);
+        showMessage(chatMessage, error.message);
 
     }
 
 });
 
 
-console.log("PRIVORA DASHBOARD INITIALIZED");
-// ==========================================
-// PRIVORA FOLLOW REQUEST SYSTEM
-// ==========================================
+// COPY USER ID
 
-let followListeners = [];
-
-
-// STOP FOLLOW LISTENERS
-
-function stopFollowSystem() {
-
-    followListeners.forEach(unsubscribe => unsubscribe());
-
-    followListeners = [];
-
-    document.getElementById("followRequestsList").innerHTML = "";
-    document.getElementById("myFriendsList").innerHTML = "";
-
-}
-
-
-// START FOLLOW SYSTEM
-
-function startFollowSystem() {
-
-    stopFollowSystem();
+copyUidBtn.addEventListener("click", async () => {
 
     if (!currentUser) return;
 
-    const uid = currentUser.uid;
+    try {
 
-    // Incoming pending requests
+        await navigator.clipboard.writeText(
+            currentUser.uid
+        );
 
-    const incomingQuery = query(
-        collection(db, "followRequests"),
-        where("receiver", "==", uid),
-        where("status", "==", "pending")
-    );
+        showMessage(
+            chatMessage,
+            "Your User ID copied.",
+            false
+        );
 
-    const incomingListener = onSnapshot(
-        incomingQuery,
-        snapshot => renderIncomingRequests(snapshot),
-        error => console.error("REQUEST LIST ERROR:", error)
-    );
+    } catch {
 
-    // Accepted incoming friends
+        showMessage(
+            chatMessage,
+            "Copy failed. Copy your User ID manually."
+        );
 
-    const acceptedIncomingQuery = query(
-        collection(db, "followRequests"),
-        where("receiver", "==", uid),
-        where("status", "==", "accepted")
-    );
+    }
 
-    const acceptedIncomingListener = onSnapshot(
-        acceptedIncomingQuery,
-        snapshot => renderFriends(),
-        error => console.error("FRIENDS ERROR:", error)
-    );
-
-    // Accepted outgoing friends
-
-    const acceptedOutgoingQuery = query(
-        collection(db, "followRequests"),
-        where("sender", "==", uid),
-        where("status", "==", "accepted")
-    );
-
-    const acceptedOutgoingListener = onSnapshot(
-        acceptedOutgoingQuery,
-        snapshot => renderFriends(),
-        error => console.error("FRIENDS ERROR:", error)
-    );
-
-    followListeners.push(
-        incomingListener,
-        acceptedIncomingListener,
-        acceptedOutgoingListener
-    );
-
-}
+});
 
 
-// SEND FOLLOW REQUEST
+// OPEN CHAT BUTTON
 
-async function sendFollowRequest(receiverUid) {
+openChatForm.addEventListener("submit", async (event) => {
 
-    if (!currentUser || receiverUid === currentUser.uid) return;
+    event.preventDefault();
 
-    const requestId = currentUser.uid + "_" + receiverUid;
+    await openChat(friendUidInput.value);
 
-    const requestRef = doc(
-        db,
-        "followRequests",
-        requestId
-    );
+});
+
+
+// SEND BUTTON
+
+sendForm.addEventListener("submit", async (event) => {
+
+    event.preventDefault();
+
+    const text = messageInput.value;
+
+    if (!text.trim()) return;
+
+    sendBtn.disabled = true;
 
     try {
 
-        const existing = await getDoc(requestRef);
+        await sendMessage(text);
 
-        if (existing.exists()) {
+        messageInput.value = "";
 
-            alert("Follow request already exists.");
-            return;
+        showMessage(
+            chatMessage,
+            "Message sent.",
+            false
+        );
+
+        messageInput.focus();
+
+    } catch (error) {
+
+        console.error("Send error:", error);
+
+        showMessage(chatMessage, error.message);
+
+    } finally {
+
+        sendBtn.disabled = !currentChatId;
+
+    }
+
+});
+
+
+// AUTH STATE
+
+onAuthStateChanged(auth, (user) => {
+
+    currentUser = user;
+
+    if (user) {
+
+        authSection.classList.add("hidden");
+
+        chatSection.classList.remove("hidden");
+
+        logoutBtn.classList.remove("hidden");
+
+        myUidElement.textContent = user.uid;
+
+        showMessage(
+            chatMessage,
+            "Signed in. Share your User ID with a friend.",
+            false
+        );
+
+    } else {
+
+        if (stopMessagesListener) {
+
+            stopMessagesListener();
+
+            stopMessagesListener = null;
 
         }
 
-        await setDoc(requestRef, {
-            sender: currentUser.uid,
-            receiver: receiverUid,
-            status: "pending",
-            createdAt: serverTimestamp()
-        });
+        currentChatId = null;
 
-        alert("Follow request sent successfully!");
+        currentFriendUid = null;
 
-    }
+        chatSection.classList.add("hidden");
 
-    catch (error) {
+        logoutBtn.classList.add("hidden");
 
-        console.error("FOLLOW ERROR:", error);
+        authSection.classList.remove("hidden");
 
-        alert("Request failed: " + error.message);
+        myUidElement.textContent = "";
 
-        throw error;
+        messageInput.value = "";
 
-    }
+        messageInput.disabled = true;
 
-}
+        sendBtn.disabled = true;
 
+        clearMessages();
 
-// ACCEPT REQUEST
-
-async function acceptFollowRequest(requestId) {
-
-    try {
-
-        await updateDoc(
-            doc(db, "followRequests", requestId),
-            {
-                status: "accepted"
-            }
-        );
-
-        alert("Friend request accepted!");
+        showMessage(authMessage, "");
 
     }
 
-    catch (error) {
-
-        console.error("ACCEPT ERROR:", error);
-
-        alert("Could not accept request: " + error.message);
-
-    }
-
-}
-
-
-// REJECT REQUEST
-
-async function rejectFollowRequest(requestId) {
-
-    const confirmed = confirm(
-        "Are you sure you want to reject this request?"
-    );
-
-    if (!confirmed) return;
-
-    try {
-
-        await deleteDoc(
-            doc(db, "followRequests", requestId)
-        );
-
-    }
-
-    catch (error) {
-
-        console.error("REJECT ERROR:", error);
-
-        alert("Could not reject request: " + error.message);
-
-    }
-
-}
-
-
-// CREATE PERSON CARD
-
-async function createPersonCard(uid, actionButtons = []) {
-
-    const profileSnap = await getDoc(
-        doc(db, "users", uid)
-    );
-
-    if (!profileSnap.exists()) return null;
-
-    const profile = profileSnap.data();
-
-    const card = document.createElement("div");
-    card.className = "search-result";
-
-    const name = document.createElement("h4");
-    name.textContent = profile.fullName || "User";
-
-    const username = document.createElement("p");
-    username.textContent = "@" + (profile.username || "");
-
-    const id = document.createElement("small");
-    id.textContent = profile.privoraId || "";
-
-    card.append(name, username, id);
-
-    actionButtons.forEach(button => {
-        card.appendChild(button);
-    });
-
-    return card;
-
-}
-
-
-// RENDER INCOMING REQUESTS
-
-async function renderIncomingRequests(snapshot) {
-
-    const container =
-        document.getElementById("followRequestsList");
-
-    container.innerHTML = "";
-
-    if (snapshot.empty) {
-
-        container.innerHTML =
-            '<p class="empty-message">No pending requests.</p>';
-
-        return;
-
-    }
-
-    for (const requestDoc of snapshot.docs) {
-
-        const data = requestDoc.data();
-
-        const acceptBtn = document.createElement("button");
-        acceptBtn.textContent = "Accept";
-
-        acceptBtn.addEventListener("click", () => {
-            acceptFollowRequest(requestDoc.id);
-        });
-
-        const rejectBtn = document.createElement("button");
-        rejectBtn.textContent = "Reject";
-        rejectBtn.className = "reject-btn";
-
-        rejectBtn.addEventListener("click", () => {
-            rejectFollowRequest(requestDoc.id);
-        });
-
-        const card = await createPersonCard(
-            data.sender,
-            [acceptBtn, rejectBtn]
-        );
-
-        if (card) container.appendChild(card);
-
-    }
-
-}
-
-
-// RENDER MY FRIENDS
-
-async function renderFriends() {
-
-    if (!currentUser) return;
-
-    const container =
-        document.getElementById("myFriendsList");
-
-    const uid = currentUser.uid;
-
-    try {
-
-        const incomingQuery = query(
-            collection(db, "followRequests"),
-            where("receiver", "==", uid),
-            where("status", "==", "accepted")
-        );
-
-        const outgoingQuery = query(
-            collection(db, "followRequests"),
-            where("sender", "==", uid),
-            where("status", "==", "accepted")
-        );
-
-        const [incoming, outgoing] = await Promise.all([
-            getDocs(incomingQuery),
-            getDocs(outgoingQuery)
-        ]);
-
-        const friendIds = new Set();
-
-        incoming.forEach(item => {
-            friendIds.add(item.data().sender);
-        });
-
-        outgoing.forEach(item => {
-            friendIds.add(item.data().receiver);
-        });
-
-        container.innerHTML = "";
-
-        if (friendIds.size === 0) {
-
-            container.innerHTML =
-                '<p class="empty-message">No friends yet.</p>';
-
-            return;
-
-        }
-
-        for (const friendUid of friendIds) {
-
-            const card = await createPersonCard(friendUid);
-
-            if (card) container.appendChild(card);
-
-        }
-
-    }
-
-    catch (error) {
-
-        console.error("FRIENDS LOADING ERROR:", error);
-
-        container.textContent =
-            "Could not load friends: " + error.message;
-
-    }
-
-}
+});

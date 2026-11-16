@@ -8,123 +8,100 @@
 </head>
 <body>
 
-<!-- LOGIN PAGE -->
-<div class="login-container" id="loginPage">
-    <div class="login-box">
-        <h1>Privora</h1>
+<main class="app-shell">
 
-        <div id="loginForm">
-            <p>Welcome back to Privora</p>
-
-            <input type="email" id="userId"
-                placeholder="Enter your email">
-
-            <input type="password" id="password"
-                placeholder="Enter password">
-
-            <button type="button" id="loginBtn">Login</button>
-
-            <p>New to Privora?
-                <a href="#" id="showSignup">Create Account</a>
-            </p>
-        </div>
-
-        <div id="signupForm" hidden>
-            <p>Create your Privora account</p>
-
-            <input type="text" id="fullName"
-                placeholder="Full Name" maxlength="50">
-
-            <input type="text" id="newUsername"
-                placeholder="Choose Username" maxlength="20">
-
-            <input type="email" id="signupEmail"
-                placeholder="Email Address">
-
-            <input type="password" id="signupPassword"
-                placeholder="Create Password">
-
-            <input type="password" id="confirmPassword"
-                placeholder="Confirm Password">
-
-            <button type="button" id="signupBtn">
-                Create Account
-            </button>
-
-            <p>Already have an account?
-                <a href="#" id="showLogin">Login</a>
-            </p>
-        </div>
-
-        <p id="error"></p>
-    </div>
-</div>
-
-<!-- PRIVORA DASHBOARD -->
-<div class="dashboard-container" id="dashboardPage" hidden>
-
-    <header class="main-header">
+    <header class="topbar">
         <div>
-            <h2>Privora</h2>
-            <p>Private connections, simple conversations.</p>
+            <h1>Privora</h1>
+            <p class="subtitle">Simple private messaging</p>
         </div>
-
-        <button id="logoutBtn" class="logout">Logout</button>
+        <button id="logoutBtn" class="button button-light hidden">
+            Logout
+        </button>
     </header>
 
-    <!-- MY PROFILE -->
-    <section class="profile-card">
-        <h3>My Profile</h3>
+    <section id="authSection" class="panel auth-panel">
+        <h2>Welcome to Privora</h2>
+        <p class="muted">Create an account or sign in.</p>
 
-        <div class="profile-info">
-            <div class="profile-avatar" id="profileAvatar">U</div>
+        <form id="authForm">
+            <label>Email</label>
+            <input id="emailInput" type="email" required>
 
-            <div class="profile-details">
-                <h3 id="profileFullName">Loading...</h3>
-                <p id="profileUsername">@username</p>
-                <p id="profilePrivoraId">PRV-ID</p>
+            <label>Password</label>
+            <input id="passwordInput" type="password"
+                   minlength="6" required>
+
+            <div class="auth-actions">
+                <button class="button" type="submit">Login</button>
+                <button class="button button-outline"
+                        type="button" id="signupBtn">
+                    Create account
+                </button>
             </div>
-        </div>
+        </form>
+
+        <p id="authMessage" class="message"></p>
     </section>
 
-    <!-- FIND PEOPLE -->
-    <section class="search-section">
-        <h3>Find People</h3>
+    <section id="chatSection" class="panel chat-panel hidden">
 
-        <div class="search-box">
-            <input
-                type="text"
-                id="searchUsername"
-                placeholder="Search by username..."
-                maxlength="20"
-            >
-
-            <button type="button" id="searchUserBtn">
-                Search
+        <div class="account-row">
+            <div>
+                <span class="small-label">Your User ID</span>
+                <code id="myUid">Loading...</code>
+            </div>
+            <button id="copyUidBtn"
+                    class="button button-outline button-small">
+                Copy ID
             </button>
         </div>
 
-        <div id="searchResults"></div>
+        <form id="openChatForm" class="open-chat-form">
+            <div class="field-grow">
+                <label>Friend's Firebase User ID</label>
+                <input id="friendUidInput"
+                       placeholder="Paste friend's UID" required>
+            </div>
+            <button class="button" type="submit">Open Chat</button>
+        </form>
+
+        <div class="chat-heading">
+            <h2 id="chatTitle">Select a friend</h2>
+            <p id="chatHint" class="muted">
+                Enter your friend's User ID.
+            </p>
+        </div>
+
+        <div id="messages" class="messages">
+            <div class="empty-state">
+                Your messages will appear here.
+            </div>
+        </div>
+
+        <form id="sendForm" class="send-form">
+            <input id="messageInput"
+                   type="text"
+                   maxlength="2000"
+                   placeholder="Type your message..."
+                   disabled>
+
+            <button id="sendBtn" class="button"
+                    type="submit" disabled>
+                Send
+            </button>
+        </form>
+
+        <p id="chatMessage" class="message"></p>
+
     </section>
 
-    <!-- FRIENDS PLACEHOLDER -->
- <!-- FOLLOW REQUESTS -->
-<section class="friends-section">
-    <h3>Follow Requests</h3>
-    <div id="followRequestsList">
-        <p class="empty-message">No pending requests.</p>
-    </div>
-</section>
+    <footer class="footer">
+        Privora - Private Messaging
+    </footer>
 
-<!-- MY FRIENDS -->
-<section class="friends-section">
-    <h3>My Friends</h3>
-    <div id="myFriendsList">
-        <p class="empty-message">No friends yet.</p>
-    </div>
-</section>
+</main>
 
 <script type="module" src="script.js"></script>
-
 </body>
 </html>
